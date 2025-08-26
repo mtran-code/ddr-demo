@@ -1,583 +1,592 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Drug Dose Response Curve Fitting Demo</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #e3f2fd 0%, #e8f5e9 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background: linear-gradient(135deg, #e3f2fd 0%, #e8f5e9 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
-        }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        overflow: hidden;
+      }
 
-        .header {
-            background: linear-gradient(135deg, #00bcd4 0%, #4caf50 100%);
-            color: white;
-            padding: 20px 30px;
-        }
+      .header {
+        background: linear-gradient(135deg, #00bcd4 0%, #4caf50 100%);
+        color: white;
+        padding: 20px 30px;
+      }
 
-        .header h1 {
-            font-size: 28px;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
+      .header h1 {
+        font-size: 28px;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
 
-        .header p {
-            opacity: 0.9;
-            font-size: 14px;
-        }
+      .header p {
+        opacity: 0.9;
+        font-size: 14px;
+      }
 
-        .controls {
-            padding: 20px 30px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-            align-items: center;
-        }
+      .controls {
+        padding: 20px 30px;
+        background: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        align-items: center;
+      }
 
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
+      .control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
 
-        .control-group label {
-            font-size: 12px;
-            color: #6c757d;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-weight: 600;
-        }
+      .control-group label {
+        font-size: 12px;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+      }
 
-        .toggle-switch {
-            position: relative;
-            display: inline-block;
-            width: 200px;
-            height: 34px;
-            background: #e9ecef;
-            border-radius: 17px;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
+      .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 200px;
+        height: 34px;
+        background: #e9ecef;
+        border-radius: 17px;
+        cursor: pointer;
+        transition: background 0.3s;
+      }
 
-        .toggle-switch input {
-            display: none;
-        }
+      .toggle-switch input {
+        display: none;
+      }
 
-        .toggle-slider {
-            position: absolute;
-            top: 2px;
-            left: 2px;
-            width: 50%;
-            height: 30px;
-            background: white;
-            border-radius: 15px;
-            transition: transform 0.3s;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: 600;
-        }
+      .toggle-slider {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 50%;
+        height: 30px;
+        background: white;
+        border-radius: 15px;
+        transition: transform 0.3s;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 600;
+      }
 
-        .toggle-switch.right .toggle-slider {
-            transform: translateX(calc(100% - 4px));
-        }
+      .toggle-switch.right .toggle-slider {
+        transform: translateX(calc(100% - 4px));
+      }
 
-        .toggle-options {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: space-around;
-            pointer-events: none;
-            padding: 0 10px;
-        }
+      .toggle-options {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+        pointer-events: none;
+        padding: 0 10px;
+      }
 
-        .toggle-option {
-            font-size: 12px;
-            font-weight: 600;
-            color: #6c757d;
-            transition: color 0.3s;
-            z-index: 1;
-        }
+      .toggle-option {
+        font-size: 12px;
+        font-weight: 600;
+        color: #6c757d;
+        transition: color 0.3s;
+        z-index: 1;
+      }
 
-        .toggle-switch.right .toggle-option:first-child,
-        .toggle-switch:not(.right) .toggle-option:last-child {
-            color: #6c757d;
-        }
+      .toggle-switch.right .toggle-option:first-child,
+      .toggle-switch:not(.right) .toggle-option:last-child {
+        color: #6c757d;
+      }
 
-        .toggle-switch.right .toggle-option:last-child,
-        .toggle-switch:not(.right) .toggle-option:first-child {
-            color: transparent;
-        }
+      .toggle-switch.right .toggle-option:last-child,
+      .toggle-switch:not(.right) .toggle-option:first-child {
+        color: transparent;
+      }
 
-        select {
-            padding: 8px 12px;
-            border: 2px solid #e9ecef;
-            border-radius: 6px;
-            background: white;
-            font-size: 14px;
-            cursor: pointer;
-            transition: border-color 0.3s;
-            min-width: 120px;
-        }
+      select {
+        padding: 8px 12px;
+        border: 2px solid #e9ecef;
+        border-radius: 6px;
+        background: white;
+        font-size: 14px;
+        cursor: pointer;
+        transition: border-color 0.3s;
+        min-width: 120px;
+      }
 
-        select:hover, select:focus {
-            border-color: #667eea;
-            outline: none;
-        }
+      select:hover,
+      select:focus {
+        border-color: #667eea;
+        outline: none;
+      }
 
-        button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
+      button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
 
-        .btn-primary {
-            background: linear-gradient(135deg, #00bcd4 0%, #4caf50 100%);
-            color: white;
-        }
+      .btn-primary {
+        background: linear-gradient(135deg, #00bcd4 0%, #4caf50 100%);
+        color: white;
+      }
 
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
-        }
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+      }
 
-        .btn-secondary {
-            background: white;
-            color: #495057;
-            border: 2px solid #dee2e6;
-        }
+      .btn-secondary {
+        background: white;
+        color: #495057;
+        border: 2px solid #dee2e6;
+      }
 
-        .btn-secondary:hover {
-            background: #f8f9fa;
-        }
+      .btn-secondary:hover {
+        background: #f8f9fa;
+      }
 
-        .btn-danger {
-            background: #dc3545;
-            color: white;
-        }
+      .btn-danger {
+        background: #dc3545;
+        color: white;
+      }
 
-        .btn-danger:hover {
-            background: #c82333;
-        }
+      .btn-danger:hover {
+        background: #c82333;
+      }
 
+      .main-content {
+        padding: 30px;
+        display: flex;
+        gap: 30px;
+      }
+
+      .canvas-container {
+        flex: 1;
+        position: relative;
+        background: white;
+        border-radius: 8px;
+        border: 2px solid #e9ecef;
+        overflow: hidden;
+      }
+
+      #plotCanvas {
+        cursor: crosshair;
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .stats-panel {
+        width: 250px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+      }
+
+      .stat-item {
+        margin-bottom: 20px;
+      }
+
+      .stat-label {
+        font-size: 12px;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+        margin-bottom: 5px;
+      }
+
+      .stat-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: #212529;
+      }
+
+      .stat-value.good {
+        color: #28a745;
+      }
+
+      .stat-value.medium {
+        color: #ffc107;
+      }
+
+      .stat-value.poor {
+        color: #dc3545;
+      }
+
+      .instructions {
+        background: #e7f3ff;
+        border-left: 4px solid #007bff;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 4px;
+      }
+
+      .instructions h3 {
+        font-size: 14px;
+        margin-bottom: 8px;
+        color: #004085;
+      }
+
+      .instructions p {
+        font-size: 13px;
+        color: #004085;
+        margin-bottom: 5px;
+      }
+
+      .data-table-container {
+        margin-top: 20px;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        overflow: hidden;
+        max-height: 250px;
+      }
+
+      .data-table-container h3 {
+        font-size: 12px;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+        margin: 0;
+        padding: 10px;
+        background: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+      }
+
+      .data-table-scroll {
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+
+      .data-table th {
+        background: white;
+        position: sticky;
+        top: 0;
+        padding: 8px;
+        text-align: left;
+        font-weight: 600;
+        border-bottom: 2px solid #dee2e6;
+        color: #495057;
+      }
+
+      .data-table td {
+        padding: 6px 8px;
+        border-bottom: 1px solid #f1f3f5;
+      }
+
+      .data-table tr:hover {
+        background: #f8f9fa;
+      }
+
+      .data-table .point-number {
+        color: #6c757d;
+        font-weight: 600;
+      }
+
+      .advanced-config {
+        margin-top: 20px;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .advanced-config-header {
+        background: #f8f9fa;
+        padding: 10px 15px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        user-select: none;
+        transition: background 0.3s;
+      }
+
+      .advanced-config-header:hover {
+        background: #e9ecef;
+      }
+
+      .advanced-config-header h3 {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0;
+        color: #495057;
+      }
+
+      .advanced-config-arrow {
+        transition: transform 0.3s;
+        color: #6c757d;
+      }
+
+      .advanced-config.expanded .advanced-config-arrow {
+        transform: rotate(180deg);
+      }
+
+      .advanced-config-content {
+        display: none;
+        padding: 15px;
+        background: white;
+        border-top: 1px solid #dee2e6;
+      }
+
+      .advanced-config.expanded .advanced-config-content {
+        display: block;
+      }
+
+      .parameter-group {
+        margin-bottom: 15px;
+      }
+
+      .parameter-group label {
+        display: flex;
+        align-items: center;
+        font-size: 12px;
+        color: #495057;
+        margin-bottom: 5px;
+        font-weight: 500;
+      }
+
+      .parameter-group input[type="number"] {
+        width: 100%;
+        padding: 6px 10px;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        font-size: 13px;
+      }
+
+      .parameter-group input[type="number"]:focus {
+        outline: none;
+        border-color: #00bcd4;
+        box-shadow: 0 0 0 0.2rem rgba(0, 188, 212, 0.25);
+      }
+
+      .parameter-description {
+        font-size: 11px;
+        color: #6c757d;
+        margin-top: 3px;
+        line-height: 1.4;
+      }
+
+      .tooltip-icon {
+        margin-left: 5px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #6c757d;
+        color: white;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        cursor: help;
+        position: relative;
+      }
+
+      .tooltip-icon:hover::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #212529;
+        color: white;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 11px;
+        white-space: normal;
+        width: max-content;
+        max-width: 250px;
+        min-width: 150px;
+        z-index: 1000;
+        pointer-events: none;
+        margin-bottom: 5px;
+        line-height: 1.4;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      }
+
+      .tooltip-icon:hover::before {
+        content: "";
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 5px solid transparent;
+        border-top-color: #212529;
+        margin-bottom: -5px;
+        z-index: 1001;
+      }
+
+      .parameter-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      @media (max-width: 768px) {
         .main-content {
-            padding: 30px;
-            display: flex;
-            gap: 30px;
-        }
-
-        .canvas-container {
-            flex: 1;
-            position: relative;
-            background: white;
-            border-radius: 8px;
-            border: 2px solid #e9ecef;
-            overflow: hidden;
-        }
-
-        #plotCanvas {
-            cursor: crosshair;
-            display: block;
-            width: 100%;
-            height: 100%;
+          flex-direction: column;
         }
 
         .stats-panel {
-            width: 250px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 20px;
+          width: 100%;
         }
 
-        .stat-item {
-            margin-bottom: 20px;
+        .controls {
+          flex-direction: column;
+          align-items: stretch;
         }
-
-        .stat-label {
-            font-size: 12px;
-            color: #6c757d;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-weight: 600;
-            margin-bottom: 5px;
-        }
-
-        .stat-value {
-            font-size: 24px;
-            font-weight: 700;
-            color: #212529;
-        }
-
-        .stat-value.good {
-            color: #28a745;
-        }
-
-        .stat-value.medium {
-            color: #ffc107;
-        }
-
-        .stat-value.poor {
-            color: #dc3545;
-        }
-
-        .instructions {
-            background: #e7f3ff;
-            border-left: 4px solid #007bff;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 4px;
-        }
-
-        .instructions h3 {
-            font-size: 14px;
-            margin-bottom: 8px;
-            color: #004085;
-        }
-
-        .instructions p {
-            font-size: 13px;
-            color: #004085;
-            margin-bottom: 5px;
-        }
-
-        .data-table-container {
-            margin-top: 20px;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            overflow: hidden;
-            max-height: 250px;
-        }
-
-        .data-table-container h3 {
-            font-size: 12px;
-            color: #6c757d;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-weight: 600;
-            margin: 0;
-            padding: 10px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
-        }
-
-        .data-table-scroll {
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 12px;
-        }
-
-        .data-table th {
-            background: white;
-            position: sticky;
-            top: 0;
-            padding: 8px;
-            text-align: left;
-            font-weight: 600;
-            border-bottom: 2px solid #dee2e6;
-            color: #495057;
-        }
-
-        .data-table td {
-            padding: 6px 8px;
-            border-bottom: 1px solid #f1f3f5;
-        }
-
-        .data-table tr:hover {
-            background: #f8f9fa;
-        }
-
-        .data-table .point-number {
-            color: #6c757d;
-            font-weight: 600;
-        }
-
-        .advanced-config {
-            margin-top: 20px;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-
-        .advanced-config-header {
-            background: #f8f9fa;
-            padding: 10px 15px;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            user-select: none;
-            transition: background 0.3s;
-        }
-
-        .advanced-config-header:hover {
-            background: #e9ecef;
-        }
-
-        .advanced-config-header h3 {
-            font-size: 13px;
-            font-weight: 600;
-            margin: 0;
-            color: #495057;
-        }
-
-        .advanced-config-arrow {
-            transition: transform 0.3s;
-            color: #6c757d;
-        }
-
-        .advanced-config.expanded .advanced-config-arrow {
-            transform: rotate(180deg);
-        }
-
-        .advanced-config-content {
-            display: none;
-            padding: 15px;
-            background: white;
-            border-top: 1px solid #dee2e6;
-        }
-
-        .advanced-config.expanded .advanced-config-content {
-            display: block;
-        }
-
-        .parameter-group {
-            margin-bottom: 15px;
-        }
-
-        .parameter-group label {
-            display: flex;
-            align-items: center;
-            font-size: 12px;
-            color: #495057;
-            margin-bottom: 5px;
-            font-weight: 500;
-        }
-
-        .parameter-group input[type="number"] {
-            width: 100%;
-            padding: 6px 10px;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            font-size: 13px;
-        }
-
-        .parameter-group input[type="number"]:focus {
-            outline: none;
-            border-color: #00bcd4;
-            box-shadow: 0 0 0 0.2rem rgba(0, 188, 212, 0.25);
-        }
-
-        .parameter-description {
-            font-size: 11px;
-            color: #6c757d;
-            margin-top: 3px;
-            line-height: 1.4;
-        }
-
-        .tooltip-icon {
-            margin-left: 5px;
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            background: #6c757d;
-            color: white;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            cursor: help;
-            position: relative;
-        }
-
-        .tooltip-icon:hover::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #212529;
-            color: white;
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-size: 11px;
-            white-space: normal;
-            width: max-content;
-            max-width: 250px;
-            min-width: 150px;
-            z-index: 1000;
-            pointer-events: none;
-            margin-bottom: 5px;
-            line-height: 1.4;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        }
-        
-        .tooltip-icon:hover::before {
-            content: '';
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            border: 5px solid transparent;
-            border-top-color: #212529;
-            margin-bottom: -5px;
-            z-index: 1001;
-        }
-
-        .parameter-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-        }
-
-        @media (max-width: 768px) {
-            .main-content {
-                flex-direction: column;
-            }
-
-            .stats-panel {
-                width: 100%;
-            }
-
-            .controls {
-                flex-direction: column;
-                align-items: stretch;
-            }
-        }
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <div class="header">
-            <h1>Drug Dose Response Curve Fitting</h1>
-            <p>Interactive tool for fitting monophasic and biphasic dose-response curves</p>
+      <div class="header">
+        <h1>Drug Dose Response Curve Fitting</h1>
+        <p>
+          Interactive tool for fitting monophasic and biphasic dose-response
+          curves
+        </p>
+      </div>
+
+      <div class="controls">
+        <div class="control-group">
+          <label>Fit Type</label>
+          <div class="toggle-switch" id="fitTypeToggle">
+            <input type="checkbox" id="fitTypeCheckbox" />
+            <div class="toggle-slider">Monophasic</div>
+            <div class="toggle-options">
+              <span class="toggle-option">Monophasic</span>
+              <span class="toggle-option">Biphasic</span>
+            </div>
+          </div>
         </div>
 
-        <div class="controls">
-            <div class="control-group">
-                <label>Fit Type</label>
-                <div class="toggle-switch" id="fitTypeToggle">
-                    <input type="checkbox" id="fitTypeCheckbox">
-                    <div class="toggle-slider">Monophasic</div>
-                    <div class="toggle-options">
-                        <span class="toggle-option">Monophasic</span>
-                        <span class="toggle-option">Biphasic</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="control-group">
-                <label>Algorithm</label>
-                <select id="algorithmSelect">
-                    <option value="hill">Hill</option>
-                    <option value="huber" selected>Huber</option>
-                </select>
-            </div>
-
-            <button class="btn-danger" id="resetBtn">Reset Everything</button>
-            
-            <div style="margin-left: auto; display: flex; gap: 10px;">
-                <button class="btn-secondary" id="exportPngBtn">Export as PNG</button>
-                <button class="btn-secondary" id="exportCsvBtn">Export Data as CSV</button>
-            </div>
+        <div class="control-group">
+          <label>Algorithm</label>
+          <select id="algorithmSelect">
+            <option value="hill">Hill</option>
+            <option value="huber" selected>Huber</option>
+          </select>
         </div>
 
-        <div class="main-content">
-            <div style="flex: 1;">
-                <div class="instructions">
-                    <h3>How to use:</h3>
-                    <p>• Click anywhere on the plot to add data points (The tool is intended to be a demo with fuzzy fake data)</p>
-                    <p>• After 3+ points, a curve will be automatically fitted</p>
-                    <p>• Toggle between monophasic and biphasic fits</p>
-                </div>
-                
-                
-                
-                <div class="canvas-container" style="height: 500px; margin-top: 20px;">
-                    <canvas id="plotCanvas"></canvas>
-                </div>
-            </div>
+        <button class="btn-danger" id="resetBtn">Reset Everything</button>
 
-            <div class="stats-panel">
-                <div class="stat-item">
-                    <div class="stat-label">R-squared</div>
-                    <div class="stat-value" id="rSquaredValue">--</div>
-                </div>
-                
-                <div class="stat-item">
-                    <div class="stat-label">Data Points</div>
-                    <div class="stat-value" id="pointCount">0</div>
-                </div>
-
-                <div class="stat-item">
-                    <div class="stat-label">IC50</div>
-                    <div class="stat-value" id="ic50Value">--</div>
-                </div>
-
-                <div class="stat-item">
-                    <div class="stat-label">AUC</div>
-                    <div class="stat-value" id="aucValue">--</div>
-                </div>
-
-                <div class="stat-item">
-                    <div class="stat-label">Fit Status</div>
-                    <div class="stat-value" id="fitStatus" style="font-size: 14px;">Need 3+ points</div>
-                </div>
-
-                <div class="data-table-container">
-                    <h3>Data Points</h3>
-                    <div class="data-table-scroll">
-                        <table class="data-table" id="dataPointsTable">
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>Conc (µM)</th>
-                                    <th>Viability (%)</th>
-                                </tr>
-                            </thead>
-                            <tbody id="dataPointsTableBody">
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
+        <div style="margin-left: auto; display: flex; gap: 10px">
+          <button class="btn-secondary" id="exportPngBtn">Export as PNG</button>
+          <button class="btn-secondary" id="exportCsvBtn">
+            Export Data as CSV
+          </button>
         </div>
+      </div>
+
+      <div class="main-content">
+        <div style="flex: 1">
+          <div class="instructions">
+            <h3>How to use:</h3>
+            <p>
+              • Click anywhere on the plot to add data points (The tool is
+              intended to be a demo with fuzzy fake data)
+            </p>
+            <p>• After 3+ points, a curve will be automatically fitted</p>
+            <p>• Toggle between monophasic and biphasic fits</p>
+          </div>
+
+          <div class="canvas-container" style="height: 500px; margin-top: 20px">
+            <canvas id="plotCanvas"></canvas>
+          </div>
+        </div>
+
+        <div class="stats-panel">
+          <div class="stat-item">
+            <div class="stat-label">R-squared</div>
+            <div class="stat-value" id="rSquaredValue">--</div>
+          </div>
+
+          <div class="stat-item">
+            <div class="stat-label">Data Points</div>
+            <div class="stat-value" id="pointCount">0</div>
+          </div>
+
+          <div class="stat-item">
+            <div class="stat-label">IC50</div>
+            <div class="stat-value" id="ic50Value">--</div>
+          </div>
+
+          <div class="stat-item">
+            <div class="stat-label">AUC</div>
+            <div class="stat-value" id="aucValue">--</div>
+          </div>
+
+          <div class="stat-item">
+            <div class="stat-label">Fit Status</div>
+            <div class="stat-value" id="fitStatus" style="font-size: 14px">
+              Need 3+ points
+            </div>
+          </div>
+
+          <div class="data-table-container">
+            <h3>Data Points</h3>
+            <div class="data-table-scroll">
+              <table class="data-table" id="dataPointsTable">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Conc (µM)</th>
+                    <th>Viability (%)</th>
+                  </tr>
+                </thead>
+                <tbody id="dataPointsTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script src="ddr-curve-fitting.js"></script>
-</body>
+  </body>
 </html>
