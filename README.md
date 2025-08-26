@@ -1,21 +1,22 @@
 # Drug Dose Response Curve Fitting Demo
 
-An interactive web-based tool for visualizing and fitting drug dose-response curves with support for both monophasic and biphasic models.
+An interactive web-based tool for visualizing and fitting drug dose–response curves, aligned with the current R implementation (3‑parameter Hill and biphasic as product of two Hills).
 
 ## Features
 
 - **Interactive plotting**: Click anywhere on the canvas to add data points
-- **Automatic curve fitting**: After 5+ points, curves are automatically fitted
+- **Automatic curve fitting**: After 3+ points (unique doses), curves are automatically fitted
 - **Multiple fit types**: 
   - Monophasic (Hill equation)
   - Biphasic (two-phase response)
 - **Algorithm options**:
-  - Hill (standard least squares)
-  - Huber (robust fitting with outlier resistance)
+  - Hill: standard least squares
+  - Huber: robust Huber loss with endpoint/midpoint weighting (R-like)
 - **Real-time metrics**:
   - R-squared (goodness of fit)
   - IC50 (half-maximal inhibitory concentration)
   - AUC (Area Under the Curve)
+  - Emax at max tested dose (in CSV export)
 - **Export capabilities**:
   - PNG image export
   - CSV data export with fitted parameters
@@ -42,14 +43,13 @@ An interactive web-based tool for visualizing and fitting drug dose-response cur
    - Y-axis: Cell viability (0-100%)
 
 3. **Observe the fit**:
-   - After adding 5 or more points, a curve will automatically be fitted
+   - After adding 3 or more points (preferably at unique doses), a curve will automatically be fitted
    - The red line shows the fitted curve
    - Metrics update in real-time on the right panel
 
 4. **Experiment with options**:
-   - Toggle between **Monophasic** and **Biphasic** fits
-   - Switch between **Hill** and **Huber** algorithms
-   - Compare how different models and algorithms handle your data
+   - Toggle between **Monophasic** and **Biphasic** fits (top switch)
+   - Switch between **Hill** and **Huber** algorithms (Algorithm dropdown)
 
 5. **Export your results**:
    - Click "Export as PNG" to save the plot
@@ -75,13 +75,13 @@ Where each phase follows a Hill-like equation with independent parameters.
 
 ### Algorithm Options
 
-- **Hill**: Standard least-squares fitting
-- **Huber**: Robust regression that reduces the influence of outliers
+- **Hill**: Standard least-squares fitting (SSE)
+- **Huber**: Robust Huber regression (fractional residuals) with extra weight on endpoints and the mid-curve (mirrors R weighting)
 
 ### Implementation
 
 - Pure JavaScript implementation with no external dependencies
-- Uses Nelder-Mead optimization for parameter estimation
+- Uses Nelder–Mead optimization for parameter estimation with bound checks and robust/SSE objective
 - Canvas-based visualization for smooth rendering
 - Responsive design that works on desktop and mobile
 
@@ -92,23 +92,14 @@ ddr_demo/
 ├── index.html           # Main application interface
 ├── ddr-curve-fitting.js # Core fitting algorithms and visualization
 ├── README.md           # This file
-├── SPEC.md            # Original specification
-└── PharmacoGX3/       # Reference R implementation
 ```
-
-## Browser Compatibility
-
-Works on all modern browsers:
-- Chrome 90+
-- Firefox 88+
-- Safari 14+
-- Edge 90+
 
 ## Tips for Best Results
 
 1. **Data Point Placement**: 
    - Distribute points across the concentration range
    - Include points in the transition region for better curve fitting
+   - Aim for at least 3 unique dose levels
 
 2. **Model Selection**:
    - Use **monophasic** for simple sigmoidal responses
@@ -130,12 +121,14 @@ Works on all modern browsers:
   - Lower values indicate higher potency
 
 - **AUC**: Area Under the Curve
-  - Normalized measure of overall drug effect
-  - Range: 0-1 (lower values indicate stronger effect)
+  - Trapezoidal integral on log10(concentration) vs capped %viability, divided by 100
+  - Not normalized by the x-range; values depend on the tested span
+
+- **Emax**: Fitted %viability at the maximum tested dose (reported in CSV)
 
 ## Troubleshooting
 
-- **Curve not appearing**: Ensure you have at least 5 data points
+- **Curve not appearing**: Ensure you have at least 3 data points at unique doses
 - **Poor fit**: Try switching between monophasic/biphasic models or Hill/Huber algorithms
 - **Export not working**: Check browser permissions for downloads
 
@@ -145,4 +138,4 @@ This demo is provided as-is for educational and research purposes.
 
 ## Acknowledgments
 
-Based on the curve fitting algorithms from the PharmacoGX R package and optimized implementations for drug dose-response analysis.
+Inspired by the curve fitting workflow in the PharmacoGX R package; this demo mirrors the 3‑parameter Hill model and a biphasic variant, with robust Huber weighting similar to the R code.
