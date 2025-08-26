@@ -67,6 +67,15 @@ class DDRCurveFitting {
             this.draw();
         });
 
+        const algo = document.getElementById('algorithmSelect');
+        if (algo) {
+            algo.addEventListener('change', (e) => {
+                this.algorithm = e.target.value;
+                this.fitCurve();
+                this.draw();
+            });
+        }
+
         document.getElementById('resetBtn').addEventListener('click', () => this.reset());
         document.getElementById('exportPngBtn').addEventListener('click', () => this.exportPng());
         document.getElementById('exportCsvBtn').addEventListener('click', () => this.exportCsv());
@@ -142,6 +151,52 @@ class DDRCurveFitting {
         } else {
             return delta * (absResidual - 0.5 * delta);
         }
+    }
+
+    // Objective on fractional residuals (0..1); supports Huber or SSE and bound penalties
+    objectiveFunction(params, dataPoints, fitType, useHuber = true) {
+        const { bounds, huberDelta } = this.advancedConfig;
+        // Bounds check
+        const inRange = (v, lo, hi) => v >= lo && v <= hi;
+        if (fitType === 'biphasic') {
+            const [hs1, eInf1, ec501, hs2, eInf2, ec502] = params;
+            if (!(
+                inRange(hs1, bounds.hillSlope.min, bounds.hillSlope.max) &&
+                inRange(hs2, bounds.hillSlope.min, bounds.hillSlope.max) &&
+                inRange(eInf1, bounds.eInf.min, bounds.eInf.max) &&
+                inRange(eInf2, bounds.eInf.min, bounds.eInf.max) &&
+                inRange(Math.log10(ec501), bounds.ec50.min, bounds.ec50.max) &&
+                inRange(Math.log10(ec502), bounds.ec50.min, bounds.ec50.max)
+            )) return 1e12;
+        } else {
+            const [hs, eInf, ec50] = params;
+            if (!(
+                inRange(hs, bounds.hillSlope.min, bounds.hillSlope.max) &&
+                inRange(eInf, bounds.eInf.min, bounds.eInf.max) &&
+                inRange(Math.log10(ec50), bounds.ec50.min, bounds.ec50.max)
+            )) return 1e12;
+        }
+
+        let total = 0;
+        const n = dataPoints.length;
+        for (let i = 0; i < n; i++) {
+            const point = dataPoints[i];
+            const predictedFrac = fitType === 'biphasic'
+                ? this.biphasicFunction(point.concentration, params)
+                : this.hillFunction(point.concentration, params);
+            const observedFrac = point.viability / 100;
+            const r = observedFrac - predictedFrac;
+            // endpoint/midpoint weighting similar to R
+            let w = 1;
+            if (i === 0 || i === 1 || i === n - 2 || i === n - 1) w = 10;
+            if (fitType !== 'biphasic') {
+                const mid = Math.floor(n / 2);
+                if (i === mid) w = 10;
+            }
+            const loss = useHuber ? this.huberLoss(r, huberDelta) : (r * r);
+            total += w * loss;
+        }
+        return total;
     }
 
     
