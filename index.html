@@ -588,6 +588,18 @@
                             <div class="parameter-description">Multiple starting points improve global optimization (default: 5 for monophasic, 8 for biphasic)</div>
                         </div>
 
+                        <div class="parameter-group">
+                            <label>
+                                Emax Metric
+                                <span class="tooltip-icon" data-tooltip="Compute Emax from the fitted curve at the maximum tested dose (like R) or disable it.">?</span>
+                            </label>
+                            <select id="emaxModeSelect">
+                                <option value="fromCurveAtMax" selected>From curve at max dose (R-like)</option>
+                                <option value="none">Disabled</option>
+                            </select>
+                            <div class="parameter-description">Controls whether Emax is reported from the fitted curve at the maximum tested concentration.</div>
+                        </div>
+
                         <div class="parameter-row">
                             <div class="parameter-group">
                                 <label>

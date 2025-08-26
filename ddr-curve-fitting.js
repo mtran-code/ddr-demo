@@ -119,6 +119,16 @@ class DDRCurveFitting {
             this.fitCurve();
             this.draw();
         });
+
+        // Emax mode toggle
+        const emaxModeSelect = document.getElementById('emaxModeSelect');
+        if (emaxModeSelect) {
+            emaxModeSelect.addEventListener('change', (e) => {
+                this.advancedConfig.emaxMode = e.target.value;
+                this.fitCurve();
+                this.draw();
+            });
+        }
         
         // Bounds inputs
         document.getElementById('eInfMin').addEventListener('change', (e) => {
@@ -773,6 +783,8 @@ class DDRCurveFitting {
         document.getElementById('minPointsForFit').value = this.advancedConfig.minPointsForFit;
         document.getElementById('curveResolution').value = this.advancedConfig.curveResolution;
         document.getElementById('initialParamSets').value = this.advancedConfig.initialParamSets;
+        const emaxModeSelect = document.getElementById('emaxModeSelect');
+        if (emaxModeSelect) emaxModeSelect.value = this.advancedConfig.emaxMode;
         
         document.getElementById('eInfMin').value = this.advancedConfig.bounds.eInf.min;
         document.getElementById('eInfMax').value = this.advancedConfig.bounds.eInf.max;
