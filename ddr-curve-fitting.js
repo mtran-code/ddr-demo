@@ -34,12 +34,7 @@ class DDRCurveFitting {
             }
         };
         
-        // Cache fitted parameters for consistent toggling
-        this.cachedFits = {
-            monophasic: null,
-            biphasic: null
-        };
-        this.dataPointsHash = null;
+        // No caching: always refit after any change
         
         this.setupCanvas();
         this.setupEventListeners();
@@ -380,25 +375,23 @@ class DDRCurveFitting {
         const { bounds } = this.advancedConfig;
         const numSets = this.advancedConfig.initialParamSets;
         const params = [];
-        
-        // Use data hash as seed for deterministic initial parameters
-        const dataHash = this.createDataHash();
+        // Randomized initial params (no deterministic seeding)
         
         for (let i = 0; i < numSets; i++) {
             if (type === 'biphasic') {
                 params.push([
-                    this.randomInRange(bounds.hillSlope.min, bounds.hillSlope.max, dataHash + i * 1000),
-                    this.randomInRange(bounds.eInf.min, bounds.eInf.max, dataHash + i * 1000 + 1),
-                    Math.pow(10, this.randomInRange(bounds.ec50.min, bounds.ec50.max, dataHash + i * 1000 + 2)),
-                    this.randomInRange(bounds.hillSlope.min, bounds.hillSlope.max, dataHash + i * 1000 + 4),
-                    this.randomInRange(bounds.eInf.min, bounds.eInf.max, dataHash + i * 1000 + 5),
-                    Math.pow(10, this.randomInRange(bounds.ec50.min, bounds.ec50.max, dataHash + i * 1000 + 6))
+                    this.randomInRange(bounds.hillSlope.min, bounds.hillSlope.max),
+                    this.randomInRange(bounds.eInf.min, bounds.eInf.max),
+                    Math.pow(10, this.randomInRange(bounds.ec50.min, bounds.ec50.max)),
+                    this.randomInRange(bounds.hillSlope.min, bounds.hillSlope.max),
+                    this.randomInRange(bounds.eInf.min, bounds.eInf.max),
+                    Math.pow(10, this.randomInRange(bounds.ec50.min, bounds.ec50.max))
                 ]);
             } else {
                 params.push([
-                    this.randomInRange(bounds.hillSlope.min, bounds.hillSlope.max, dataHash + i * 1000),
-                    this.randomInRange(bounds.eInf.min, bounds.eInf.max, dataHash + i * 1000 + 1),
-                    Math.pow(10, this.randomInRange(bounds.ec50.min, bounds.ec50.max, dataHash + i * 1000 + 2))
+                    this.randomInRange(bounds.hillSlope.min, bounds.hillSlope.max),
+                    this.randomInRange(bounds.eInf.min, bounds.eInf.max),
+                    Math.pow(10, this.randomInRange(bounds.ec50.min, bounds.ec50.max))
                 ]);
             }
         }
@@ -416,77 +409,31 @@ class DDRCurveFitting {
         return min + Math.random() * (max - min);
     }
     
-    createDataHash(points = null, extraKey = '') {
-        // Create a simple hash of data points for caching
-        let hash = 0;
-        const src = points || this.dataPoints;
-        const str = src
-            .map(p => `${p.concentration.toFixed(5)},${p.viability.toFixed(5)}`)
-            .join('|') + `|${extraKey}`;
-        for (let i = 0; i < str.length; i++) {
-            const char = str.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash; // Convert to 32bit integer
-        }
-        return hash;
-    }
-
-    getFitConfigFingerprint() {
-        const b = this.advancedConfig.bounds;
-        return [
-            `algo=${this.algorithm}`,
-            `delta=${this.advancedConfig.huberDelta}`,
-            `hs=[${b.hillSlope.min},${b.hillSlope.max}]`,
-            `ein=[${b.eInf.min},${b.eInf.max}]`,
-            `ec50=[${b.ec50.min},${b.ec50.max}]`,
-            `it=${this.advancedConfig.maxIterations}`,
-            `tol=${this.advancedConfig.convergenceTolerance}`,
-            `init=${this.advancedConfig.initialParamSets}`
-        ].join(';');
-    }
+    // No data hashing / cache fingerprinting — always refit
 
     fitCurve() {
         if (this.dataPoints.length < this.advancedConfig.minPointsForFit) {
             this.fittedCurve = null;
-            this.cachedFits.monophasic = null;
-            this.cachedFits.biphasic = null;
-            this.dataPointsHash = null;
             return;
         }
 
         const sortedPoints = this.getSortedDataPoints();
-        const cfgKey = this.getFitConfigFingerprint();
-        const currentHash = this.createDataHash(sortedPoints, cfgKey);
         const useHuber = this.algorithm === 'huber';
-        
-        // Check if we have cached results for this data and can reuse them
-        if (this.dataPointsHash === currentHash && this.cachedFits[this.fitType]) {
-            this.fittedCurve = this.cachedFits[this.fitType];
+        // Always fit the curve (no caching)
+        if (this.fitType === 'biphasic') {
+            const initialParams = this.generateInitialParams('biphasic');
+            const objFn = (params) => this.objectiveFunction(params, sortedPoints, 'biphasic', useHuber);
+            this.fittedCurve = {
+                type: 'biphasic',
+                params: this.nelderMead(objFn, initialSimplex = initialParams)
+            };
         } else {
-            // Fit the curve
-            if (this.fitType === 'biphasic') {
-                const initialParams = this.generateInitialParams('biphasic');
-                const objFn = (params) => this.objectiveFunction(params, sortedPoints, 'biphasic', useHuber);
-                this.fittedCurve = {
-                    type: 'biphasic',
-                    params: this.nelderMead(objFn, initialParams)
-                };
-                
-                // Cache the result
-                this.cachedFits.biphasic = this.fittedCurve;
-            } else {
-                const initialParams = this.generateInitialParams('monophasic');
-                const objFn = (params) => this.objectiveFunction(params, sortedPoints, 'monophasic', useHuber);
-                this.fittedCurve = {
-                    type: 'monophasic',
-                    params: this.nelderMead(objFn, initialParams)
-                };
-                
-                // Cache the result
-                this.cachedFits.monophasic = this.fittedCurve;
-            }
-            
-            this.dataPointsHash = currentHash;
+            const initialParams = this.generateInitialParams('monophasic');
+            const objFn = (params) => this.objectiveFunction(params, sortedPoints, 'monophasic', useHuber);
+            this.fittedCurve = {
+                type: 'monophasic',
+                params: this.nelderMead(objFn, initialSimplex = initialParams)
+            };
         }
 
         this.calculateMetrics(sortedPoints);
@@ -745,9 +692,6 @@ class DDRCurveFitting {
         this.dataPoints = [];
         this.fittedCurve = null;
         this.metrics = { rSquared: null, ic50: null, auc: null };
-        this.cachedFits.monophasic = null;
-        this.cachedFits.biphasic = null;
-        this.dataPointsHash = null;
         this.updateStats();
         this.draw();
     }
