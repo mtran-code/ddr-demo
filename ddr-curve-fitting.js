@@ -5,26 +5,32 @@ class DDRCurveFitting {
         this.dataPoints = [];
         this.fittedCurve = null;
         this.fitType = 'monophasic';
-        this.algorithm = 'hill';
+        this.algorithm = 'huber';
         this.metrics = {
             rSquared: null,
             ic50: null,
-            auc: null
+            auc: null,
+            emax: null
         };
         
         // Advanced configuration parameters
         this.advancedConfig = {
             maxIterations: 1000,
             convergenceTolerance: 1e-6,
-            huberDelta: 10,
-            minPointsForFit: 5,
+            // Huber delta on fractional scale (0..1), aligned with R
+            huberDelta: 1.0,
+            // Align with R minimum requirement of >=3 points
+            minPointsForFit: 3,
             curveResolution: 200,
             initialParamSets: 5,
+            // Emax metric mode: 'fromCurveAtMax' to mimic R (default), or 'none'
+            emaxMode: 'fromCurveAtMax',
             bounds: {
-                eInf: { min: 0, max: 0.3 },
-                eMax: { min: 0.8, max: 1.2 },
-                hillSlope: { min: 0.5, max: 3 },
-                ec50: { min: -2, max: 2 }  // log10 scale
+                // Parameter bounds aligned to R helpers (3PL and biphasic)
+                eInf: { min: 0, max: 1.0 },
+                hillSlope: { min: 0.0, max: 4.0 },
+                // log10(EC50) bounds; we sample in log space and exponentiate
+                ec50: { min: -6, max: 6 }
             }
         };
         
@@ -132,17 +138,7 @@ class DDRCurveFitting {
             this.draw();
         });
         
-        document.getElementById('eMaxMin').addEventListener('change', (e) => {
-            this.advancedConfig.bounds.eMax.min = parseFloat(e.target.value);
-            this.fitCurve();
-            this.draw();
-        });
-        
-        document.getElementById('eMaxMax').addEventListener('change', (e) => {
-            this.advancedConfig.bounds.eMax.max = parseFloat(e.target.value);
-            this.fitCurve();
-            this.draw();
-        });
+        // eMax is not a parameter in 3PL; Emax metric is computed from the curve at max dose
         
         document.getElementById('hillSlopeMin').addEventListener('change', (e) => {
             this.advancedConfig.bounds.hillSlope.min = parseFloat(e.target.value);
@@ -178,8 +174,9 @@ class DDRCurveFitting {
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
         
-        const concentration = this.pixelToConcentration(x);
-        const viability = this.pixelToViability(y);
+        const round5 = (v) => Math.round(v * 1e5) / 1e5;
+        const concentration = round5(this.pixelToConcentration(x));
+        const viability = round5(this.pixelToViability(y));
         
         this.dataPoints.push({ concentration, viability });
         this.updateStats();
@@ -217,22 +214,20 @@ class DDRCurveFitting {
         return padding + (1 - viability / 100) * plotHeight;
     }
 
+    // 3-parameter Hill (top fixed at 1.0), returns fraction in [0,1]
     hillFunction(x, params) {
-        const [hs, eInf, ec50, eMax] = params;
+        const [hs, eInf, ec50] = params;
         const logX = Math.log10(x);
         const logEC50 = Math.log10(ec50);
-        return eInf + (eMax - eInf) / (1 + Math.pow(10, hs * (logX - logEC50)));
+        // Equivalent to: eInf + (1 - eInf) / (1 + (x/ec50)^hs)
+        return eInf + (1 - eInf) / (1 + Math.pow(10, hs * (logX - logEC50)));
     }
 
+    // 6-parameter biphasic: product of two 3PL Hill curves, returns fraction
     biphasicFunction(x, params) {
-        const [hs1, eInf1, ec501, eMax1, hs2, eInf2, ec502, eMax2] = params;
-        const logX = Math.log10(x);
-        const logEC501 = Math.log10(ec501);
-        const logEC502 = Math.log10(ec502);
-        
-        const phase1 = eInf1 + (eMax1 - eInf1) / (1 + Math.pow(10, hs1 * (logX - logEC501)));
-        const phase2 = eInf2 + (eMax2 - eInf2) / (1 + Math.pow(10, hs2 * (logX - logEC502)));
-        
+        const [hs1, eInf1, ec501, hs2, eInf2, ec502] = params;
+        const phase1 = this.hillFunction(x, [hs1, eInf1, ec501]);
+        const phase2 = this.hillFunction(x, [hs2, eInf2, ec502]);
         return phase1 * phase2;
     }
 
@@ -245,16 +240,43 @@ class DDRCurveFitting {
         }
     }
 
-    objectiveFunction(params, dataPoints, fitType, useHuber = false) {
+    // Objective on fractional residuals (0..1) to align with R
+    objectiveFunction(params, dataPoints, fitType, useHuber = true) {
         let totalLoss = 0;
         const delta = this.advancedConfig.huberDelta;
+        const { bounds } = this.advancedConfig;
+
+        // Simple bound check with large penalty (Nelder-Mead has no bounds)
+        const inBounds = () => {
+            if (fitType === 'biphasic') {
+                const [hs1, eInf1, ec501, hs2, eInf2, ec502] = params;
+                return (
+                    hs1 >= bounds.hillSlope.min && hs1 <= bounds.hillSlope.max &&
+                    hs2 >= bounds.hillSlope.min && hs2 <= bounds.hillSlope.max &&
+                    eInf1 >= bounds.eInf.min && eInf1 <= bounds.eInf.max &&
+                    eInf2 >= bounds.eInf.min && eInf2 <= bounds.eInf.max &&
+                    Math.log10(ec501) >= bounds.ec50.min && Math.log10(ec501) <= bounds.ec50.max &&
+                    Math.log10(ec502) >= bounds.ec50.min && Math.log10(ec502) <= bounds.ec50.max
+                );
+            } else {
+                const [hs, eInf, ec50] = params;
+                return (
+                    hs >= bounds.hillSlope.min && hs <= bounds.hillSlope.max &&
+                    eInf >= bounds.eInf.min && eInf <= bounds.eInf.max &&
+                    Math.log10(ec50) >= bounds.ec50.min && Math.log10(ec50) <= bounds.ec50.max
+                );
+            }
+        };
+        if (!inBounds()) {
+            return 1e12; // strong penalty for out-of-bounds
+        }
         
         for (const point of dataPoints) {
-            const predicted = fitType === 'biphasic' 
-                ? this.biphasicFunction(point.concentration, params) * 100
-                : this.hillFunction(point.concentration, params) * 100;
-            
-            const residual = point.viability - predicted;
+            const predictedFrac = fitType === 'biphasic'
+                ? this.biphasicFunction(point.concentration, params)
+                : this.hillFunction(point.concentration, params);
+            const observedFrac = point.viability / 100;
+            const residual = observedFrac - predictedFrac;
             
             if (useHuber) {
                 totalLoss += this.huberLoss(residual, delta);
@@ -368,18 +390,15 @@ class DDRCurveFitting {
                     this.randomInRange(bounds.hillSlope.min, bounds.hillSlope.max, dataHash + i * 1000),
                     this.randomInRange(bounds.eInf.min, bounds.eInf.max, dataHash + i * 1000 + 1),
                     Math.pow(10, this.randomInRange(bounds.ec50.min, bounds.ec50.max, dataHash + i * 1000 + 2)),
-                    this.randomInRange(bounds.eMax.min, bounds.eMax.max, dataHash + i * 1000 + 3),
                     this.randomInRange(bounds.hillSlope.min, bounds.hillSlope.max, dataHash + i * 1000 + 4),
                     this.randomInRange(bounds.eInf.min, bounds.eInf.max, dataHash + i * 1000 + 5),
-                    Math.pow(10, this.randomInRange(bounds.ec50.min, bounds.ec50.max, dataHash + i * 1000 + 6)),
-                    this.randomInRange(bounds.eMax.min, bounds.eMax.max, dataHash + i * 1000 + 7)
+                    Math.pow(10, this.randomInRange(bounds.ec50.min, bounds.ec50.max, dataHash + i * 1000 + 6))
                 ]);
             } else {
                 params.push([
                     this.randomInRange(bounds.hillSlope.min, bounds.hillSlope.max, dataHash + i * 1000),
                     this.randomInRange(bounds.eInf.min, bounds.eInf.max, dataHash + i * 1000 + 1),
-                    Math.pow(10, this.randomInRange(bounds.ec50.min, bounds.ec50.max, dataHash + i * 1000 + 2)),
-                    this.randomInRange(bounds.eMax.min, bounds.eMax.max, dataHash + i * 1000 + 3)
+                    Math.pow(10, this.randomInRange(bounds.ec50.min, bounds.ec50.max, dataHash + i * 1000 + 2))
                 ]);
             }
         }
@@ -397,10 +416,13 @@ class DDRCurveFitting {
         return min + Math.random() * (max - min);
     }
     
-    createDataHash() {
+    createDataHash(points = null) {
         // Create a simple hash of data points for caching
         let hash = 0;
-        const str = this.dataPoints.map(p => `${p.concentration.toFixed(6)},${p.viability.toFixed(2)}`).join('|');
+        const src = points || this.dataPoints;
+        const str = src
+            .map(p => `${p.concentration.toFixed(5)},${p.viability.toFixed(5)}`)
+            .join('|');
         for (let i = 0; i < str.length; i++) {
             const char = str.charCodeAt(i);
             hash = ((hash << 5) - hash) + char;
@@ -418,7 +440,8 @@ class DDRCurveFitting {
             return;
         }
 
-        const currentHash = this.createDataHash();
+        const sortedPoints = this.getSortedDataPoints();
+        const currentHash = this.createDataHash(sortedPoints);
         const useHuber = this.algorithm === 'huber';
         
         // Check if we have cached results for this data and can reuse them
@@ -428,8 +451,7 @@ class DDRCurveFitting {
             // Fit the curve
             if (this.fitType === 'biphasic') {
                 const initialParams = this.generateInitialParams('biphasic');
-                
-                const objFn = (params) => this.objectiveFunction(params, this.dataPoints, 'biphasic', useHuber);
+                const objFn = (params) => this.objectiveFunction(params, sortedPoints, 'biphasic', useHuber);
                 this.fittedCurve = {
                     type: 'biphasic',
                     params: this.nelderMead(objFn, initialParams)
@@ -439,8 +461,7 @@ class DDRCurveFitting {
                 this.cachedFits.biphasic = this.fittedCurve;
             } else {
                 const initialParams = this.generateInitialParams('monophasic');
-                
-                const objFn = (params) => this.objectiveFunction(params, this.dataPoints, 'monophasic', useHuber);
+                const objFn = (params) => this.objectiveFunction(params, sortedPoints, 'monophasic', useHuber);
                 this.fittedCurve = {
                     type: 'monophasic',
                     params: this.nelderMead(objFn, initialParams)
@@ -453,21 +474,21 @@ class DDRCurveFitting {
             this.dataPointsHash = currentHash;
         }
 
-        this.calculateMetrics();
+        this.calculateMetrics(sortedPoints);
         this.updateStats();
     }
 
-    calculateMetrics() {
-        if (!this.fittedCurve || this.dataPoints.length < 5) {
-            this.metrics = { rSquared: null, ic50: null, auc: null };
+    calculateMetrics(sortedPoints) {
+        if (!this.fittedCurve || sortedPoints.length < this.advancedConfig.minPointsForFit) {
+            this.metrics = { rSquared: null, ic50: null, auc: null, emax: null };
             return;
         }
 
         let sumSquaredResiduals = 0;
         let sumSquaredTotal = 0;
-        const meanViability = this.dataPoints.reduce((sum, p) => sum + p.viability, 0) / this.dataPoints.length;
+        const meanViability = sortedPoints.reduce((sum, p) => sum + p.viability, 0) / sortedPoints.length;
 
-        for (const point of this.dataPoints) {
+        for (const point of sortedPoints) {
             const predicted = this.fittedCurve.type === 'biphasic'
                 ? this.biphasicFunction(point.concentration, this.fittedCurve.params) * 100
                 : this.hillFunction(point.concentration, this.fittedCurve.params) * 100;
@@ -479,49 +500,60 @@ class DDRCurveFitting {
         this.metrics.rSquared = sumSquaredTotal > 0 ? 1 - (sumSquaredResiduals / sumSquaredTotal) : 0;
 
         if (this.fittedCurve.type === 'monophasic') {
-            const [hs, eInf, ec50, eMax] = this.fittedCurve.params;
-            const n = 0.5;
-            
-            if (n >= eInf && n <= eMax) {
-                this.metrics.ic50 = ec50 * Math.pow((n - eMax) / (eInf - n), 1 / hs);
+            const [hs, eInf, ec50] = this.fittedCurve.params;
+            const n = 0.5; // target fraction
+            if (n >= eInf && n <= 1.0 && (0.5 - eInf) > 0) {
+                // EC50 * (0.5/(0.5 - e_inf))^(1/hs)
+                this.metrics.ic50 = ec50 * Math.pow(0.5 / (0.5 - eInf), 1 / hs);
             } else {
                 this.metrics.ic50 = null;
             }
         } else {
-            const monophasicParams = this.fitMonophasicForIC50();
+            const monophasicParams = this.fitMonophasicForIC50(sortedPoints);
             if (monophasicParams) {
-                const [hs, eInf, ec50, eMax] = monophasicParams;
+                const [hs, eInf, ec50] = monophasicParams;
                 const n = 0.5;
-                
-                if (n >= eInf && n <= eMax) {
-                    this.metrics.ic50 = ec50 * Math.pow((n - eMax) / (eInf - n), 1 / hs);
+                if (n >= eInf && n <= 1.0 && (0.5 - eInf) > 0) {
+                    this.metrics.ic50 = ec50 * Math.pow(0.5 / (0.5 - eInf), 1 / hs);
                 } else {
                     this.metrics.ic50 = null;
                 }
             }
         }
 
-        const xValues = this.dataPoints.map(p => Math.log10(p.concentration)).sort((a, b) => a - b);
-        const yValues = this.dataPoints.map(p => Math.min(p.viability, 100));
-        
+        // AUC on sorted paired x/y
+        const xs = sortedPoints.map(p => Math.log10(p.concentration));
+        const ys = sortedPoints.map(p => Math.min(p.viability, 100));
         let auc = 0;
-        for (let i = 0; i < xValues.length - 1; i++) {
-            const x1 = xValues[i];
-            const x2 = xValues[i + 1];
-            const y1 = yValues[i];
-            const y2 = yValues[i + 1];
+        for (let i = 0; i < xs.length - 1; i++) {
+            const x1 = xs[i];
+            const x2 = xs[i + 1];
+            const y1 = ys[i];
+            const y2 = ys[i + 1];
             auc += ((y1 + y2) / 2) * (x2 - x1);
         }
         this.metrics.auc = auc / 100;
+
+        // Emax metric like R: fitted value at max tested concentration
+        if (this.advancedConfig.emaxMode === 'fromCurveAtMax') {
+            const maxConc = Math.max(...sortedPoints.map(p => p.concentration));
+            const emaxPct = (this.fittedCurve.type === 'biphasic'
+                ? this.biphasicFunction(maxConc, this.fittedCurve.params)
+                : this.hillFunction(maxConc, this.fittedCurve.params)) * 100;
+            this.metrics.emax = emaxPct;
+        } else {
+            this.metrics.emax = null;
+        }
     }
 
-    fitMonophasicForIC50() {
+    fitMonophasicForIC50(sortedPoints) {
+        const { bounds } = this.advancedConfig;
         const initialParams = [
-            [1.5, 0.1, 1.0, 1.0],
-            [2.0, 0.2, 0.5, 0.95]
+            [1.5, 0.1, 1.0],
+            [2.0, 0.2, Math.pow(10, -1.0)]
         ];
-        
-        const objFn = (params) => this.objectiveFunction(params, this.dataPoints, 'monophasic', false);
+        const useHuber = this.algorithm === 'huber';
+        const objFn = (params) => this.objectiveFunction(params, sortedPoints, 'monophasic', useHuber);
         return this.nelderMead(objFn, initialParams);
     }
 
@@ -715,8 +747,9 @@ class DDRCurveFitting {
     exportCsv() {
         let csv = 'Concentration (µM),Viability (%)\n';
         
-        for (const point of this.dataPoints) {
-            csv += `${point.concentration},${point.viability}\n`;
+        const sortedPoints = this.getSortedDataPoints();
+        for (const point of sortedPoints) {
+            csv += `${point.concentration.toFixed(5)},${point.viability.toFixed(5)}\n`;
         }
         
         csv += '\nMetrics\n';
@@ -725,14 +758,17 @@ class DDRCurveFitting {
         csv += `AUC,${this.metrics.auc !== null ? this.metrics.auc.toFixed(3) : 'N/A'}\n`;
         csv += `Fit Type,${this.fitType}\n`;
         csv += `Algorithm,${this.algorithm}\n`;
+        if (this.metrics.emax !== null) {
+            csv += `Emax_at_max_dose,${this.metrics.emax.toFixed(3)}\n`;
+        }
         
         if (this.fittedCurve) {
             csv += '\nFitted Parameters\n';
             if (this.fittedCurve.type === 'monophasic') {
-                csv += 'Hill Slope,E_inf,EC50,E_max\n';
-                csv += `${this.fittedCurve.params[0]},${this.fittedCurve.params[1]},${this.fittedCurve.params[2]},${this.fittedCurve.params[3]}\n`;
+                csv += 'Hill Slope,E_inf,EC50\n';
+                csv += `${this.fittedCurve.params[0]},${this.fittedCurve.params[1]},${this.fittedCurve.params[2]}\n`;
             } else {
-                csv += 'HS1,E_inf1,EC50_1,E_max1,HS2,E_inf2,EC50_2,E_max2\n';
+                csv += 'HS1,E_inf1,EC50_1,HS2,E_inf2,EC50_2\n';
                 csv += this.fittedCurve.params.join(',') + '\n';
             }
         }
@@ -747,8 +783,8 @@ class DDRCurveFitting {
     updateDataTable() {
         const tbody = document.getElementById('dataPointsTableBody');
         tbody.innerHTML = '';
-        
-        this.dataPoints.forEach((point, index) => {
+        const sortedPoints = this.getSortedDataPoints();
+        sortedPoints.forEach((point, index) => {
             const row = tbody.insertRow();
             
             const cellNum = row.insertCell(0);
@@ -756,11 +792,18 @@ class DDRCurveFitting {
             cellNum.textContent = index + 1;
             
             const cellConc = row.insertCell(1);
-            cellConc.textContent = point.concentration.toExponential(2);
+            cellConc.textContent = point.concentration.toFixed(5);
             
             const cellViab = row.insertCell(2);
-            cellViab.textContent = point.viability.toFixed(1);
+            cellViab.textContent = point.viability.toFixed(5);
         });
+    }
+
+    getSortedDataPoints() {
+        // Always work on a sorted copy for computations and UI
+        const copy = this.dataPoints.slice();
+        copy.sort((a, b) => a.concentration - b.concentration);
+        return copy;
     }
     
     loadAdvancedConfig() {
@@ -774,8 +817,6 @@ class DDRCurveFitting {
         
         document.getElementById('eInfMin').value = this.advancedConfig.bounds.eInf.min;
         document.getElementById('eInfMax').value = this.advancedConfig.bounds.eInf.max;
-        document.getElementById('eMaxMin').value = this.advancedConfig.bounds.eMax.min;
-        document.getElementById('eMaxMax').value = this.advancedConfig.bounds.eMax.max;
         document.getElementById('hillSlopeMin').value = this.advancedConfig.bounds.hillSlope.min;
         document.getElementById('hillSlopeMax').value = this.advancedConfig.bounds.hillSlope.max;
         document.getElementById('ec50Min').value = this.advancedConfig.bounds.ec50.min;
@@ -787,15 +828,15 @@ class DDRCurveFitting {
         this.advancedConfig = {
             maxIterations: 1000,
             convergenceTolerance: 1e-6,
-            huberDelta: 10,
-            minPointsForFit: 5,
+            huberDelta: 1.0,
+            minPointsForFit: 3,
             curveResolution: 200,
             initialParamSets: 5,
+            emaxMode: 'fromCurveAtMax',
             bounds: {
-                eInf: { min: 0, max: 0.3 },
-                eMax: { min: 0.8, max: 1.2 },
-                hillSlope: { min: 0.5, max: 3 },
-                ec50: { min: -2, max: 2 }
+                eInf: { min: 0, max: 1.0 },
+                hillSlope: { min: 0.0, max: 4.0 },
+                ec50: { min: -6, max: 6 }
             }
         };
         
