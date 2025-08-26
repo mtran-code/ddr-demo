@@ -405,7 +405,28 @@ class DDRCurveFitting {
                 ]);
             }
         }
-        
+        // Ensure simplex has at least dim+1 vertices for Nelder–Mead
+        const dim = (type === 'biphasic') ? 6 : 3;
+        const need = Math.max(0, (dim + 1) - params.length);
+        if (need > 0) {
+            const base = params[0] || (type === 'biphasic'
+                ? [1.0, 0.1, 1.0, 1.5, 0.2, 10.0]
+                : [1.0, 0.1, 1.0]);
+            for (let k = 0; k < need; k++) {
+                const p = base.slice();
+                const j = k % dim;
+                const eps = (j === 1) ? 0.02 : 0.1; // smaller step for E_inf
+                p[j] = p[j] * (1 + eps);
+                // keep EC50 positive
+                if (type === 'biphasic') {
+                    if (j === 2 || j === 5) p[j] = Math.max(p[j], 1e-6);
+                } else {
+                    if (j === 2) p[j] = Math.max(p[j], 1e-6);
+                }
+                params.push(p);
+            }
+        }
+
         return params;
     }
     
@@ -435,14 +456,14 @@ class DDRCurveFitting {
             const objFn = (params) => this.objectiveFunction(params, sortedPoints, 'biphasic', useHuber);
             this.fittedCurve = {
                 type: 'biphasic',
-                params: this.nelderMead(objFn, initialSimplex = initialParams)
+                params: this.nelderMead(objFn, initialParams)
             };
         } else {
             const initialParams = this.generateInitialParams('monophasic');
             const objFn = (params) => this.objectiveFunction(params, sortedPoints, 'monophasic', useHuber);
             this.fittedCurve = {
                 type: 'monophasic',
-                params: this.nelderMead(objFn, initialSimplex = initialParams)
+                params: this.nelderMead(objFn, initialParams)
             };
         }
 
