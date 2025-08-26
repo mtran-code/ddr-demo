@@ -416,19 +416,33 @@ class DDRCurveFitting {
         return min + Math.random() * (max - min);
     }
     
-    createDataHash(points = null) {
+    createDataHash(points = null, extraKey = '') {
         // Create a simple hash of data points for caching
         let hash = 0;
         const src = points || this.dataPoints;
         const str = src
             .map(p => `${p.concentration.toFixed(5)},${p.viability.toFixed(5)}`)
-            .join('|');
+            .join('|') + `|${extraKey}`;
         for (let i = 0; i < str.length; i++) {
             const char = str.charCodeAt(i);
             hash = ((hash << 5) - hash) + char;
             hash = hash & hash; // Convert to 32bit integer
         }
         return hash;
+    }
+
+    getFitConfigFingerprint() {
+        const b = this.advancedConfig.bounds;
+        return [
+            `algo=${this.algorithm}`,
+            `delta=${this.advancedConfig.huberDelta}`,
+            `hs=[${b.hillSlope.min},${b.hillSlope.max}]`,
+            `ein=[${b.eInf.min},${b.eInf.max}]`,
+            `ec50=[${b.ec50.min},${b.ec50.max}]`,
+            `it=${this.advancedConfig.maxIterations}`,
+            `tol=${this.advancedConfig.convergenceTolerance}`,
+            `init=${this.advancedConfig.initialParamSets}`
+        ].join(';');
     }
 
     fitCurve() {
@@ -441,7 +455,8 @@ class DDRCurveFitting {
         }
 
         const sortedPoints = this.getSortedDataPoints();
-        const currentHash = this.createDataHash(sortedPoints);
+        const cfgKey = this.getFitConfigFingerprint();
+        const currentHash = this.createDataHash(sortedPoints, cfgKey);
         const useHuber = this.algorithm === 'huber';
         
         // Check if we have cached results for this data and can reuse them
