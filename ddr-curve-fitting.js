@@ -67,111 +67,10 @@ class DDRCurveFitting {
             this.draw();
         });
 
-        document.getElementById('algorithmSelect').addEventListener('change', (e) => {
-            this.algorithm = e.target.value;
-            this.fitCurve();
-            this.draw();
-        });
-
         document.getElementById('resetBtn').addEventListener('click', () => this.reset());
         document.getElementById('exportPngBtn').addEventListener('click', () => this.exportPng());
         document.getElementById('exportCsvBtn').addEventListener('click', () => this.exportCsv());
-        
-        // Advanced configuration toggle
-        const advancedConfigToggle = document.getElementById('advancedConfigToggle');
-        const advancedConfig = document.getElementById('advancedConfig');
-        advancedConfigToggle.addEventListener('click', () => {
-            advancedConfig.classList.toggle('expanded');
-        });
-        
-        // Advanced configuration inputs
-        document.getElementById('maxIterations').addEventListener('change', (e) => {
-            this.advancedConfig.maxIterations = parseInt(e.target.value);
-            this.fitCurve();
-            this.draw();
-        });
-        
-        document.getElementById('convergenceTolerance').addEventListener('change', (e) => {
-            this.advancedConfig.convergenceTolerance = parseFloat(e.target.value);
-            this.fitCurve();
-            this.draw();
-        });
-        
-        document.getElementById('huberDelta').addEventListener('change', (e) => {
-            this.advancedConfig.huberDelta = parseFloat(e.target.value);
-            this.fitCurve();
-            this.draw();
-        });
-        
-        document.getElementById('minPointsForFit').addEventListener('change', (e) => {
-            this.advancedConfig.minPointsForFit = parseInt(e.target.value);
-            this.fitCurve();
-            this.draw();
-        });
-        
-        document.getElementById('curveResolution').addEventListener('change', (e) => {
-            this.advancedConfig.curveResolution = parseInt(e.target.value);
-            this.draw();
-        });
-        
-        document.getElementById('initialParamSets').addEventListener('change', (e) => {
-            this.advancedConfig.initialParamSets = parseInt(e.target.value);
-            this.fitCurve();
-            this.draw();
-        });
-
-        // Emax mode toggle
-        const emaxModeSelect = document.getElementById('emaxModeSelect');
-        if (emaxModeSelect) {
-            emaxModeSelect.addEventListener('change', (e) => {
-                this.advancedConfig.emaxMode = e.target.value;
-                this.fitCurve();
-                this.draw();
-            });
-        }
-        
-        // Bounds inputs
-        document.getElementById('eInfMin').addEventListener('change', (e) => {
-            this.advancedConfig.bounds.eInf.min = parseFloat(e.target.value);
-            this.fitCurve();
-            this.draw();
-        });
-        
-        document.getElementById('eInfMax').addEventListener('change', (e) => {
-            this.advancedConfig.bounds.eInf.max = parseFloat(e.target.value);
-            this.fitCurve();
-            this.draw();
-        });
-        
-        // eMax is not a parameter in 3PL; Emax metric is computed from the curve at max dose
-        
-        document.getElementById('hillSlopeMin').addEventListener('change', (e) => {
-            this.advancedConfig.bounds.hillSlope.min = parseFloat(e.target.value);
-            this.fitCurve();
-            this.draw();
-        });
-        
-        document.getElementById('hillSlopeMax').addEventListener('change', (e) => {
-            this.advancedConfig.bounds.hillSlope.max = parseFloat(e.target.value);
-            this.fitCurve();
-            this.draw();
-        });
-        
-        document.getElementById('ec50Min').addEventListener('change', (e) => {
-            this.advancedConfig.bounds.ec50.min = parseFloat(e.target.value);
-            this.fitCurve();
-            this.draw();
-        });
-        
-        document.getElementById('ec50Max').addEventListener('change', (e) => {
-            this.advancedConfig.bounds.ec50.max = parseFloat(e.target.value);
-            this.fitCurve();
-            this.draw();
-        });
-        
-        document.getElementById('resetAdvancedBtn').addEventListener('click', () => {
-            this.resetAdvancedConfig();
-        });
+        // No advanced configuration handlers (parity with R)
     }
 
     handleCanvasClick(event) {
@@ -245,53 +144,7 @@ class DDRCurveFitting {
         }
     }
 
-    // Objective on fractional residuals (0..1) to align with R
-    objectiveFunction(params, dataPoints, fitType, useHuber = true) {
-        let totalLoss = 0;
-        const delta = this.advancedConfig.huberDelta;
-        const { bounds } = this.advancedConfig;
-
-        // Simple bound check with large penalty (Nelder-Mead has no bounds)
-        const inBounds = () => {
-            if (fitType === 'biphasic') {
-                const [hs1, eInf1, ec501, hs2, eInf2, ec502] = params;
-                return (
-                    hs1 >= bounds.hillSlope.min && hs1 <= bounds.hillSlope.max &&
-                    hs2 >= bounds.hillSlope.min && hs2 <= bounds.hillSlope.max &&
-                    eInf1 >= bounds.eInf.min && eInf1 <= bounds.eInf.max &&
-                    eInf2 >= bounds.eInf.min && eInf2 <= bounds.eInf.max &&
-                    Math.log10(ec501) >= bounds.ec50.min && Math.log10(ec501) <= bounds.ec50.max &&
-                    Math.log10(ec502) >= bounds.ec50.min && Math.log10(ec502) <= bounds.ec50.max
-                );
-            } else {
-                const [hs, eInf, ec50] = params;
-                return (
-                    hs >= bounds.hillSlope.min && hs <= bounds.hillSlope.max &&
-                    eInf >= bounds.eInf.min && eInf <= bounds.eInf.max &&
-                    Math.log10(ec50) >= bounds.ec50.min && Math.log10(ec50) <= bounds.ec50.max
-                );
-            }
-        };
-        if (!inBounds()) {
-            return 1e12; // strong penalty for out-of-bounds
-        }
-        
-        for (const point of dataPoints) {
-            const predictedFrac = fitType === 'biphasic'
-                ? this.biphasicFunction(point.concentration, params)
-                : this.hillFunction(point.concentration, params);
-            const observedFrac = point.viability / 100;
-            const residual = observedFrac - predictedFrac;
-            
-            if (useHuber) {
-                totalLoss += this.huberLoss(residual, delta);
-            } else {
-                totalLoss += residual * residual;
-            }
-        }
-        
-        return totalLoss;
-    }
+    
 
     nelderMead(fn, initialSimplex, maxIterations = null, tolerance = null) {
         if (!maxIterations) maxIterations = this.advancedConfig.maxIterations;
@@ -502,15 +355,11 @@ class DDRCurveFitting {
                 this.metrics.ic50 = null;
             }
         } else {
-            const monophasicParams = this.fitMonophasicForIC50(sortedPoints);
-            if (monophasicParams) {
-                const [hs, eInf, ec50] = monophasicParams;
-                const n = 0.5;
-                if (n >= eInf && n <= 1.0 && (0.5 - eInf) > 0) {
-                    this.metrics.ic50 = ec50 * Math.pow(0.5 / (0.5 - eInf), 1 / hs);
-                } else {
-                    this.metrics.ic50 = null;
-                }
+            // For biphasic, mirror R: use EC50 from Hill (monophasic) fit
+            const mono = this.fitMonophasicForIC50(sortedPoints);
+            if (mono) {
+                const [, , ec50] = mono;
+                this.metrics.ic50 = ec50;
             }
         }
 
@@ -797,44 +646,11 @@ class DDRCurveFitting {
     }
     
     loadAdvancedConfig() {
-        // Load values into UI
-        document.getElementById('maxIterations').value = this.advancedConfig.maxIterations;
-        document.getElementById('convergenceTolerance').value = this.advancedConfig.convergenceTolerance;
-        document.getElementById('huberDelta').value = this.advancedConfig.huberDelta;
-        document.getElementById('minPointsForFit').value = this.advancedConfig.minPointsForFit;
-        document.getElementById('curveResolution').value = this.advancedConfig.curveResolution;
-        document.getElementById('initialParamSets').value = this.advancedConfig.initialParamSets;
-        const emaxModeSelect = document.getElementById('emaxModeSelect');
-        if (emaxModeSelect) emaxModeSelect.value = this.advancedConfig.emaxMode;
-        
-        document.getElementById('eInfMin').value = this.advancedConfig.bounds.eInf.min;
-        document.getElementById('eInfMax').value = this.advancedConfig.bounds.eInf.max;
-        document.getElementById('hillSlopeMin').value = this.advancedConfig.bounds.hillSlope.min;
-        document.getElementById('hillSlopeMax').value = this.advancedConfig.bounds.hillSlope.max;
-        document.getElementById('ec50Min').value = this.advancedConfig.bounds.ec50.min;
-        document.getElementById('ec50Max').value = this.advancedConfig.bounds.ec50.max;
+        // Advanced configuration removed for parity with R; nothing to load
     }
     
     resetAdvancedConfig() {
-        // Reset to defaults
-        this.advancedConfig = {
-            maxIterations: 1000,
-            convergenceTolerance: 1e-6,
-            huberDelta: 1.0,
-            minPointsForFit: 3,
-            curveResolution: 200,
-            initialParamSets: 5,
-            emaxMode: 'fromCurveAtMax',
-            bounds: {
-                eInf: { min: 0, max: 1.0 },
-                hillSlope: { min: 0.0, max: 4.0 },
-                ec50: { min: -6, max: 6 }
-            }
-        };
-        
-        this.loadAdvancedConfig();
-        this.fitCurve();
-        this.draw();
+        // No-op
     }
 }
 
